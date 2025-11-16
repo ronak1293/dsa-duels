@@ -13,6 +13,8 @@ export default function FindMatch() {
   const [duel, setDuel] = useState(null);
   const [problem, setProblem] = useState(null);
 
+  const [finished, setFinished] = useState(null);
+
   const startMatchmaking = () => {
     if (!token) {
       setStatus("No token, please login again.");
@@ -32,110 +34,131 @@ export default function FindMatch() {
         socketId: s.id,
       };
 
-      setStatus("Searching for opponent...");
+      setStatus("Searching for an opponent…");
       s.emit("find_match", requestUser);
     });
 
-    s.on("waiting", () => setStatus("Waiting for opponent..."));
+    s.on("waiting", () => setStatus("Waiting for an opponent…"));
 
-    // When match is found
+    // Match found
     s.on("match_found", ({ duel, opponent }) => {
-      setStatus("Matched!");
+      setStatus("Match Found!");
       setMatchFound(true);
       setOpponent(opponent);
       setDuel(duel);
       setProblem(duel.problem);
     });
 
-    // When duel ends
-    // When duel ends
-s.on("duel_finished", ({ winner, loser, ratingChanges }) => {
-  const isWinner = winner === user.handle;
+    // Duel finished popup
+    s.on("duel_finished", ({ winner, loser, ratingChanges }) => {
+      const isWinner = winner === user.handle;
 
-  const myRatingChange = isWinner
-    ? ratingChanges[winner]
-    : ratingChanges[loser];
+      const myRatingChange = isWinner
+        ? ratingChanges[winner]
+        : ratingChanges[loser];
 
-  setStatus(
-    isWinner
-      ? `🎉 You WON! Rating +${myRatingChange}`
-      : `😞 You LOST! Rating ${myRatingChange}`
-  );
+      setFinished({
+        result: isWinner ? "WIN" : "LOSS",
+        message: isWinner
+          ? `🎉 You WON! Rating +${myRatingChange}`
+          : `😞 You LOST! Rating ${myRatingChange}`,
+      });
 
-  // Update user rating in context
-  user.rating = user.rating + myRatingChange;
+      // update rating
+      user.rating = user.rating + myRatingChange;
 
-  // Refresh page after 3 seconds
-  setTimeout(() => window.location.reload(), 3000);
-});
-
+      setTimeout(() => window.location.reload(), 3000);
+    });
 
     s.on("connect_error", (err) => {
       setStatus("Connection Error: " + err.message);
     });
   };
 
-  // cleanup
+  // Cleanup
   useEffect(() => {
     return () => {
       if (socket) socket.disconnect();
     };
   }, [socket]);
 
-  // ============================
-  // UI SECTION
-  // ============================
   return (
-    <div style={{ padding: "20px" }}>
-      <h1>Matchmaking</h1>
+    <div className="min-h-screen bg-gray-900 text-white flex flex-col items-center justify-center p-6">
+      
+      {/* =======================
+          BEFORE MATCH FOUND
+      ======================= */}
+      {!matchFound && !finished && (
+        <div className="text-center">
+          <h1 className="text-3xl font-bold mb-6">Matchmaking</h1>
 
-      {/* BEFORE MATCH FOUND */}
-      {!matchFound && (
-        <>
-          <button onClick={startMatchmaking}>Start Matchmaking</button>
-          <p>{status}</p>
-        </>
+          <button
+            onClick={startMatchmaking}
+            className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-lg font-semibold transition"
+          >
+            Start Matchmaking
+          </button>
+
+          {status && (
+            <div className="mt-6 flex flex-col items-center">
+              {/* Pulsing Searching Animation */}
+              <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin my-4"></div>
+
+              <p className="text-gray-300 animate-pulse text-lg">{status}</p>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* AFTER MATCH FOUND */}
+      {/* =======================
+          MATCH FOUND POPUP
+      ======================= */}
       {matchFound && opponent && (
-        <div
-          style={{
-            marginTop: "20px",
-            padding: "20px",
-            border: "1px solid #444",
-            borderRadius: "10px",
-            width: "350px",
-          }}
-        >
-          <h2>Opponent Found</h2>
+        <div className="bg-gray-800 w-full max-w-md p-6 rounded-2xl shadow-xl animate-[fadeIn_0.4s_ease] border border-gray-700">
 
-          <p>
-            <strong>Opponent:</strong> {opponent.handle}
-          </p>
+          <h2 className="text-2xl font-bold text-green-400 mb-4 text-center">
+            🎯 Match Found!
+          </h2>
 
-          <p>
-            <strong>Rating:</strong> {opponent.rating || "N/A"}
-          </p>
+          <div className="space-y-3 text-gray-300">
+            <p><strong className="text-white">Opponent:</strong> {opponent.handle}</p>
+            <p><strong className="text-white">Rating:</strong> {opponent.rating || "N/A"}</p>
 
-          <h3>Problem Assigned:</h3>
-          <p>
-            <strong>{problem.title}</strong>
-          </p>
-          {console.log(problem)
-          }
-          <a
-            href={`https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ color: "blue" }}
-          >
-            Open Problem
-          </a>
+            <h3 className="text-xl font-semibold text-white mt-4">Problem Assigned</h3>
+            <p className="text-lg font-semibold text-blue-300">{problem.title}</p>
 
-          <div style={{ marginTop: "20px", color: "green" }}>
-            <p>{status}</p>
+            <a
+              href={`https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-blue-400 underline hover:text-blue-300 transition"
+            >
+              Open Problem
+            </a>
+
+            <div className="mt-4 text-green-400 text-center font-semibold">
+              {status}
+            </div>
           </div>
+        </div>
+      )}
+
+      {/* =======================
+          DUEL FINISHED POPUP
+      ======================= */}
+      {finished && (
+        <div className="fixed bottom-8 bg-gray-800 px-6 py-4 rounded-xl shadow-xl border border-gray-700 animate-[slideUp_0.4s_ease]">
+
+          <p
+            className={`text-2xl font-bold text-center ${
+              finished.result === "WIN" ? "text-green-400" : "text-red-400"
+            }`}
+          >
+            {finished.result === "WIN" ? "🏆 YOU WON!" : "💀 YOU LOST"}
+          </p>
+
+          <p className="text-gray-300 mt-2 text-center">{finished.message}</p>
+
         </div>
       )}
     </div>
